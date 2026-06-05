@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Генератор PDF</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<style>
+    :root {
+        --bg-start: #0f172a; --bg-end: #1e3a8a;
+        --glass: rgba(255, 255, 255, 0.08); --glass-border: rgba(255, 255, 255, 0.15);
+        --text: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg, var(--bg-start) 0%, var(--bg-end) 100%);
+        color: var(--text); padding: 10px; display: flex; flex-direction: column;
+    }
+    header { padding: 8px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .logo-img { width: 28px; height: 28px; border-radius: 6px; background: #fff; padding: 2px; }
+    header h1 { font-size: 15px; font-weight: 700; }
+    header .hint { font-size: 10px; color: #94a3b8; margin-left: auto; }
+
+    .control-panel {
+        display: flex; flex-wrap: wrap; gap: 8px;
+        background: var(--glass); backdrop-filter: blur(16px);
+        padding: 8px 12px; border-radius: 20px; margin-bottom: 8px;
+        align-items: center; justify-content: center; flex-shrink: 0;
+        border: 1px solid var(--glass-border);
+    }
+    .control-group { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 20px; }
+    .control-group label { font-weight: 600; font-size: 0.75rem; color: #bbf0c3; }
+    select, input[type="text"] {
+        background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2);
+        padding: 6px 12px; font-size: 0.8rem; border-radius: 16px; outline: none; font-weight: 500; cursor: pointer;
+    }
+    input[type="text"] { width: 140px; }
+
+    button {
+        position: relative; border: 1px solid rgba(255,255,255,0.25);
+        padding: 7px 14px; font-size: 0.8rem; font-weight: 600; border-radius: 12px;
+        cursor: pointer; color: white; transition: all 0.2s ease;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3); overflow: hidden;
+    }
+    button::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+        background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 100%);
+        border-radius: 12px 12px 0 0; pointer-events: none;
+    }
+    button:active:not(:disabled) { transform: translateY(3px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #generateBtn { background: linear-gradient(180deg, #34d399 0%, #059669 100%); box-shadow: 0 4px 0 #047857, 0 6px 15px rgba(52, 211, 153, 0.4); }
+    #generateBtn:hover:not(:disabled) { box-shadow: 0 4px 0 #047857, 0 0 20px rgba(52, 211, 153, 0.8), 0 0 40px rgba(52, 211, 153, 0.4); filter: brightness(1.1); }
+    #generateBtn:active:not(:disabled) { box-shadow: 0 1px 0 #047857, 0 0 15px rgba(52, 211, 153, 0.6); }
+
+    .btn-blue { background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 100%); box-shadow: 0 4px 0 #1d4ed8, 0 6px 15px rgba(59, 130, 246, 0.4); }
+    .btn-blue:hover:not(:disabled) { box-shadow: 0 4px 0 #1d4ed8, 0 0 20px rgba(59, 130, 246, 0.8), 0 0 40px rgba(59, 130, 246, 0.4); filter: brightness(1.1); }
+    .btn-blue:active:not(:disabled) { box-shadow: 0 1px 0 #1d4ed8, 0 0 15px rgba(59, 130, 246, 0.6); }
+
+    .btn-purple { background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%); box-shadow: 0 4px 0 #5b21b6, 0 6px 15px rgba(124, 58, 237, 0.4); }
+    .btn-purple:hover:not(:disabled) { box-shadow: 0 4px 0 #5b21b6, 0 0 20px rgba(167, 139, 250, 0.8), 0 0 40px rgba(167, 139, 250, 0.4); filter: brightness(1.1); }
+    .btn-purple:active:not(:disabled) { box-shadow: 0 1px 0 #5b21b6, 0 0 15px rgba(167, 139, 250, 0.6); }
+
+    .btn-danger { background: linear-gradient(180deg, #f87171 0%, #ef4444 100%); box-shadow: 0 4px 0 #b91c1c, 0 6px 15px rgba(239, 68, 68, 0.4); }
+    .btn-danger:hover:not(:disabled) { box-shadow: 0 4px 0 #b91c1c, 0 0 20px rgba(248, 113, 113, 0.8), 0 0 40px rgba(248, 113, 113, 0.4); filter: brightness(1.1); }
+    .btn-danger:active:not(:disabled) { box-shadow: 0 1px 0 #b91c1c, 0 0 15px rgba(248, 113, 113, 0.6); }
+
+    .workspace { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; margin-bottom: 8px; position: relative; }
+    .editor-box {
+        flex: 1; display: flex; flex-direction: column;
+        background: rgba(0,0,0,0.2); border-radius: 14px;
+        border: 2px dashed transparent; overflow: hidden;
+        transition: border-color 0.2s, background 0.2s;
+    }
+    .editor-box.drag-over { border-color: #34d399; background: rgba(52, 211, 153, 0.1); }
+    .editor-header {
+        padding: 6px 12px; background: rgba(0,0,0,0.3);
+        font-size: 0.75rem; font-weight: 600; color: #94a3b8;
+        display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .editor-header .hint-text { font-size: 0.7rem; color: #64748b; font-weight: normal; }
+    textarea {
+        flex: 1; width: 100%; background: transparent; border: none;
+        color: #e2e8f0; padding: 12px; font-family: 'Consolas', monospace;
+        font-size: 0.9rem; resize: none; outline: none; line-height: 1.5;
+    }
+    .stats-bar { padding: 4px 12px; background: rgba(0,0,0,0.3); font-size: 0.7rem; color: #94a3b8; }
+
+    footer {
+        padding: 10px 16px;
+        background: var(--glass);
+        backdrop-filter: blur(16px);
+        border-radius: 16px;
+        border: 1px solid var(--glass-border);
+        flex-shrink: 0;
+        text-align: center;
+        width: 100%;
+    }
+    .footer-line-1 {
+        font-size: 13px;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 6px;
+    }
+    .footer-line-2 {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: #cbd5e1;
+    }
+    .phone-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.3);
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--glass-border);
+    }
+    .phone-badge span { color: #fff; font-weight: 700; font-size: 13px; }
+    .copy-phone-btn {
+        background: linear-gradient(180deg, #475569 0%, #334155 100%);
+        color: white; border: 1px solid rgba(255,255,255,0.2);
+        padding: 2px 8px; border-radius: 6px; font-size: 10px;
+        cursor: pointer; box-shadow: 0 2px 0 #1e293b; transition: all 0.2s;
+    }
+    .copy-phone-btn:hover { box-shadow: 0 2px 0 #1e293b, 0 0 12px rgba(71, 85, 105, 0.6); filter: brightness(1.15); }
+    .copy-phone-btn:active { transform: translateY(2px); box-shadow: 0 0 0 #1e293b; }
+    
+    .success-text { color: #86efac; font-weight: 600; }
+    .link-box {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; background: rgba(59, 130, 246, 0.15);
+        border: 1px solid #3b82f6; border-radius: 8px;
+        color: #60a5fa; text-decoration: none; font-weight: 600; font-size: 11px;
+        transition: all 0.2s;
+    }
+    .link-box:hover { background: rgba(59, 130, 246, 0.3); box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+
+    .toast {
+        position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%) translateY(100px);
+        background: rgba(52, 211, 153, 0.95); color: #064e3b; padding: 10px 20px;
+        border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 99999;
+        opacity: 0; transition: all 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.error { background: rgba(239, 68, 68, 0.95); color: white; }
+
+    .loading-overlay {
+        position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px);
+        display: none; align-items: center; justify-content: center;
+        z-index: 999999; flex-direction: column; gap: 20px;
+    }
+    .loading-overlay.show { display: flex; }
+    .loading-box {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
+        padding: 40px 60px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .hourglass { font-size: 64px; display: inline-block; animation: flip 1.5s ease-in-out infinite; margin-bottom: 10px; }
+    @keyframes flip {
+        0% { transform: rotate(0deg) scale(1); } 25% { transform: rotate(180deg) scale(1.1); }
+        50% { transform: rotate(180deg) scale(1); } 75% { transform: rotate(360deg) scale(1.1); }
+        100% { transform: rotate(360deg) scale(1); }
+    }
+    .loading-title { color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+    .loading-subtitle { color: #94a3b8; font-size: 13px; }
+    .loading-dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
+    @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } 100% { content: ''; } }
+
+    input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+    <img src="favicon.ico" alt="Логотип" class="logo-img" onerror="this.style.display='none'">
+    <h1>Генератор PDF</h1>
+    <span class="hint">Офлайн · Кириллица · Крупный шрифт</span>
+</header>
+
+<div class="control-panel">
+    <div class="control-group">
+        <label>Размер шрифта:</label>
+        <select id="fontSize">
+            <option value="10">10 pt (мелкий)</option>
+            <option value="12" selected>12 pt (стандарт)</option>
+            <option value="14">14 pt (увеличенный)</option>
+            <option value="16">16 pt (крупный)</option>
+            <option value="18">18 pt (большой)</option>
+            <option value="22">22 pt (для слабовидящих)</option>
+            <option value="26">26 pt (очень крупный)</option>
+            <option value="32">32 pt (Large Print)</option>
+            <option value="36">36 pt (максимальный)</option>
+        </select>
+    </div>
+    <div class="control-group">
+        <label>Заголовок:</label>
+        <input type="text" id="docTitle" placeholder="(необязательно)">
+    </div>
+    <label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:#bbf0c3;cursor:pointer;">
+        <input type="checkbox" id="pageNumbers" checked> Нумерация страниц
+    </label>
+    <button class="btn-purple" id="loadFileBtn">📂 Загрузить</button>
+    <input type="file" id="fileInput" accept=".txt,.md,.text,.rtf">
+    <button id="generateBtn">📄 Создать PDF</button>
+    <button class="btn-blue" id="saveTxtBtn">💾 Скачать текст</button>
+    <button class="btn-danger" id="clearBtn">🗑 Очистить</button>
+</div>
+
+<div class="workspace">
+    <div class="editor-box" id="editorBox">
+        <div class="editor-header">
+            <span>Введите текст или перетащите .txt / .md файл сюда</span>
+            <span class="hint-text" id="fileNameHint"></span>
+        </div>
+        <textarea id="inputArea" placeholder="Введите текст на русском языке...&#10;&#10;Абзацы разделяются пустой строкой (Enter).&#10;Текст автоматически перенесётся на новые страницы в PDF."></textarea>
+        <div class="stats-bar">
+            <span id="stats">Символов: 0 | Слов: 0</span>
+        </div>
+    </div>
+</div>
+
+<footer>
+    <div class="footer-line-1">🤝 ПОДДЕРЖАТЬ ПРОЕКТ 💙 Приложение бесплатное. Было и останется.</div>
+    <div class="footer-line-2">
+        <span>Если проект помог вам — поддержите разработку:</span>
+        <div class="phone-badge">
+            <span>📱 8-920-227-56-76</span>
+            <button class="copy-phone-btn" id="copyPhone">📋</button>
+        </div>
+        <span class="success-text">✅ Мгновенно. Без комиссии.</span>
+        <a href="https://ancf-hue.github.io/" target="_blank" class="link-box">🌟 Каталог Anti-AI Shield</a>
+    </div>
+</footer>
+
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-box">
+        <div class="hourglass">⏳</div>
+        <div class="loading-title">Создание PDF<span class="loading-dots"></span></div>
+        <div class="loading-subtitle" id="loadingStatus">Подготовка страниц...</div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="jspdf.umd.min.js"></script>
+
+<script>
+    const inputArea = document.getElementById('inputArea');
+    const statsEl = document.getElementById('stats');
+    const toast = document.getElementById('toast');
+    const generateBtn = document.getElementById('generateBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingStatus = document.getElementById('loadingStatus');
+    const editorBox = document.getElementById('editorBox');
+    const fileNameHint = document.getElementById('fileNameHint');
+
+    function updateStats() {
+        const text = inputArea.value;
+        const chars = text.length;
+        const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+        statsEl.textContent = `Символов: ${chars} | Слов: ${words}`;
+    }
+    inputArea.addEventListener('input', updateStats);
+
+    function showToast(msg, isError = false) {
+        toast.textContent = msg;
+        toast.className = 'toast show' + (isError ? ' error' : '');
+        setTimeout(() => toast.className = 'toast', 3000);
+    }
+
+    function showLoading(text) {
+        loadingStatus.textContent = text;
+        loadingOverlay.classList.add('show');
+    }
+
+    function hideLoading() {
+        loadingOverlay.classList.remove('show');
+    }
+
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // ============================================================
+    // ✅ ИСПРАВЛЕННЫЙ ПЕРЕНОС ПО СЛОВАМ (с учётом красной строки!)
+    // ============================================================
+    function wrapText(ctx, text, maxWidth, indent) {
+        const lines = [];
+        // Разбиваем текст по явным переносам строк
+        const paragraphs = text.split(/\r?\n/);
+        
+        for (let p = 0; p < paragraphs.length; p++) {
+            const paragraph = paragraphs[p];
+            
+            // Пустая строка = отступ между абзацами
+            if (paragraph.trim() === '') {
+                lines.push({ text: '', isEmpty: true });
+                continue;
+            }
+            
+            // Разбиваем на слова, сохраняя пробелы
+            const words = paragraph.split(/(\s+)/);
+            let currentLine = '';
+            let isFirstLineOfParagraph = true;
+            
+            for (let i = 0; i < words.length; i++) {
+                const word = words[i];
+                
+                // Пропускаем ведущие пробелы
+                if (currentLine === '' && /^\s+$/.test(word)) continue;
+                
+                const testLine = currentLine + word;
+                
+                // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: для первой строки учитываем отступ (красную строку)
+                const availableWidth = isFirstLineOfParagraph ? (maxWidth - indent) : maxWidth;
+                const metrics = ctx.measureText(testLine);
+                
+                if (metrics.width > availableWidth && currentLine.length > 0) {
+                    // Слово не влезает — сохраняем текущую строку и начинаем новую
+                    lines.push({ 
+                        text: currentLine.trim(), 
+                        isEmpty: false, 
+                        hasIndent: isFirstLineOfParagraph 
+                    });
+                    currentLine = word.trimStart();
+                    isFirstLineOfParagraph = false;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            
+            // Добавляем последнюю строку абзаца
+            if (currentLine.trim().length > 0) {
+                lines.push({ 
+                    text: currentLine.trim(), 
+                    isEmpty: false, 
+                    hasIndent: isFirstLineOfParagraph 
+                });
+            }
+        }
+        
+        return lines;
+    }
+
+    // ============================================================
+    // 📂 ЗАГРУЗКА ФАЙЛА
+    // ============================================================
+    const fileInput = document.getElementById('fileInput');
+    const loadFileBtn = document.getElementById('loadFileBtn');
+
+    loadFileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) loadTextFile(file);
+        fileInput.value = '';
+    });
+
+    function loadTextFile(file) {
+        const validExts = ['.txt', '.md', '.text', '.rtf'];
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!validExts.includes(ext) && !file.type.startsWith('text/')) {
+            showToast('❌ Поддерживаются только .txt и .md файлы', true);
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('❌ Файл слишком большой (макс. 5 МБ)', true);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            inputArea.value = e.target.result;
+            updateStats();
+            fileNameHint.textContent = '📄 ' + file.name;
+            showToast(`✅ Загружен файл: ${file.name}`);
+        };
+        reader.onerror = () => showToast('❌ Ошибка чтения файла', true);
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        editorBox.addEventListener(eventName, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            editorBox.classList.add('drag-over');
+        });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        editorBox.addEventListener(eventName, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            editorBox.classList.remove('drag-over');
+        });
+    });
+    editorBox.addEventListener('drop', (e) => {
+        const file = e.dataTransfer.files[0];
+        if (file) loadTextFile(file);
+    });
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) loadTextFile(file);
+    });
+
+    // ============================================================
+    // 💾 СКАЧАТЬ ТЕКСТ
+    // ============================================================
+    document.getElementById('saveTxtBtn').addEventListener('click', () => {
+        const text = inputArea.value.trim();
+        if (!text) { showToast('❌ Нечего скачивать', true); return; }
+        const title = document.getElementById('docTitle').value.trim();
+        const safeFilename = (title || 'text').replace(/[^a-zа-яё0-9]/gi, '_').substring(0, 50);
+        const filename = `${safeFilename}_${new Date().toISOString().slice(0,10)}.txt`;
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(`💾 Текст сохранён: ${filename}`);
+    });
+
+    // ============================================================
+    // 📄 ГЕНЕРАЦИЯ PDF
+    // ============================================================
+    generateBtn.addEventListener('click', async () => {
+        const text = inputArea.value.trim();
+        if (!text) { showToast('❌ Введите текст', true); return; }
+        if (typeof window.jspdf === 'undefined') { showToast('❌ Файл jspdf.umd.min.js не найден!', true); return; }
+
+        const title = document.getElementById('docTitle').value.trim();
+        const fontSize = parseInt(document.getElementById('fontSize').value);
+        const showPageNumbers = document.getElementById('pageNumbers').checked;
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ Создание...';
+        showLoading('Подготовка страниц...');
+        await delay(50);
+
+        try {
+            const { jsPDF } = window.jspdf;
+            const PAGE_WIDTH = 210;
+            const PAGE_HEIGHT = 297;
+            const MARGIN = fontSize >= 22 ? 20 : 15;
+            
+            const SCALE = 3;
+            const DPI = 96;
+            const pxPerMm = DPI / 25.4;
+            
+            const canvasWidth = Math.round(PAGE_WIDTH * pxPerMm * SCALE);
+            const canvasHeight = Math.round(PAGE_HEIGHT * pxPerMm * SCALE);
+            const marginPx = Math.round(MARGIN * pxPerMm * SCALE);
+            const maxWidth = canvasWidth - marginPx * 2;
+            
+            const titleSize = Math.min(fontSize + 8, 48);
+            const bodySize = fontSize;
+            const lineHeightPx = Math.round(1.5 * bodySize * pxPerMm * SCALE);
+            const titleLineHeight = Math.round(titleSize * 1.3 * pxPerMm * SCALE);
+            const pageNumSize = Math.max(9, Math.round(bodySize * 0.75));
+            const pageNumHeight = Math.round(pageNumSize * 1.5 * pxPerMm * SCALE);
+            
+            // ✅ Размер красной строки (отступ первой строки абзаца)
+            const indent = bodySize < 22 ? Math.round(bodySize * pxPerMm * SCALE * 1.25) : 0;
+            
+            const titleFont = `bold ${titleSize * pxPerMm * SCALE}px Arial, Helvetica, sans-serif`;
+            const bodyFont = `${bodySize * pxPerMm * SCALE}px "Times New Roman", Georgia, serif`;
+            const pageNumFont = `${pageNumSize * pxPerMm * SCALE}px Arial, sans-serif`;
+            
+            showLoading('Анализ текста и перенос строк...');
+            await delay(30);
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvasWidth;
+            tempCanvas.height = canvasHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.font = bodyFont;
+            
+            // ✅ Передаём indent в функцию переноса
+            const allLines = wrapText(tempCtx, text, maxWidth, indent);
+            
+            // Подсчёт страниц
+            let totalPages = 1;
+            let countY = marginPx;
+            
+            if (title) {
+                countY += titleLineHeight + lineHeightPx;
+            }
+            
+            for (const line of allLines) {
+                if (countY + lineHeightPx > canvasHeight - marginPx - pageNumHeight) {
+                    totalPages++;
+                    countY = marginPx;
+                }
+                countY += lineHeightPx;
+            }
+            
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            
+            function createPageCanvas() {
+                const canvas = document.createElement('canvas');
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+                return { canvas, ctx };
+            }
+            
+            function addPageToPdf(canvas, isFirst) {
+                const imgData = canvas.toDataURL('image/png');
+                if (!isFirst) doc.addPage();
+                doc.addImage(imgData, 'PNG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+            }
+            
+            function drawPageNumber(ctx, pageNum, total) {
+                ctx.save();
+                ctx.font = pageNumFont;
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(`Страница ${pageNum} из ${total}`, canvasWidth / 2, canvasHeight - Math.round(marginPx * 0.4));
+                ctx.restore();
+            }
+            
+            let { canvas, ctx } = createPageCanvas();
+            let y = marginPx;
+            let currentPage = 1;
+            let isFirstPage = true;
+            
+            if (title) {
+                ctx.fillStyle = 'black';
+                ctx.font = titleFont;
+                ctx.textBaseline = 'top';
+                ctx.textAlign = 'center';
+                ctx.fillText(title, canvasWidth / 2, y);
+                y += titleLineHeight + lineHeightPx;
+            }
+            
+            ctx.textAlign = 'left';
+            ctx.font = bodyFont;
+            ctx.fillStyle = 'black';
+            ctx.textBaseline = 'top';
+            
+            let lastStatusUpdate = 0;
+            
+            // ✅ ОТРИСОВКА С УЧЁТОМ КРАСНОЙ СТРОКИ
+            for (let i = 0; i < allLines.length; i++) {
+                const line = allLines[i];
+                
+                const now = Date.now();
+                if (now - lastStatusUpdate > 200) {
+                    showLoading(`Рисуем страницу ${currentPage} из ${totalPages}...`);
+                    lastStatusUpdate = now;
+                }
+                
+                if (y + lineHeightPx > canvasHeight - marginPx - pageNumHeight) {
+                    if (showPageNumbers) drawPageNumber(ctx, currentPage, totalPages);
+                    addPageToPdf(canvas, isFirstPage);
+                    isFirstPage = false;
+                    currentPage++;
+                    
+                    ({ canvas, ctx } = createPageCanvas());
+                    ctx.font = bodyFont;
+                    ctx.fillStyle = 'black';
+                    ctx.textBaseline = 'top';
+                    ctx.textAlign = 'left';
+                    y = marginPx;
+                    
+                    showLoading(`Рисуем страницу ${currentPage} из ${totalPages}...`);
+                    lastStatusUpdate = Date.now();
+                }
+                
+                if (line.isEmpty) {
+                    y += lineHeightPx;
+                } else {
+                    // ✅ Используем флаг hasIndent для применения красной строки
+                    const x = marginPx + (line.hasIndent ? indent : 0);
+                    ctx.fillText(line.text, x, y);
+                    y += lineHeightPx;
+                }
+            }
+            
+            if (showPageNumbers) drawPageNumber(ctx, currentPage, totalPages);
+            addPageToPdf(canvas, isFirstPage);
+            
+            showLoading('Сохраняем файл...');
+            await delay(30);
+            
+            const safeFilename = (title || 'document').replace(/[^a-zа-яё0-9]/gi, '_').substring(0, 50);
+            const filename = `${safeFilename}_${new Date().toISOString().slice(0,10)}.pdf`;
+            doc.save(filename);
+            
+            hideLoading();
+            showToast(`✅ PDF создан! Страниц: ${totalPages}`);
+        } catch (err) {
+            console.error(err);
+            hideLoading();
+            showToast('❌ Ошибка: ' + err.message, true);
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.textContent = '📄 Создать PDF';
+        }
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        inputArea.value = '';
+        fileNameHint.textContent = '';
+        updateStats();
+    });
+
+    document.getElementById('copyPhone').onclick = function() {
+        const btn = this;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText('8-920-227-56-76').then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅';
+                setTimeout(() => { btn.innerHTML = '📋'; }, 2000);
+            }).catch(() => fallbackCopy());
+        } else {
+            fallbackCopy();
+        }
+        function fallbackCopy() {
+            const ta = document.createElement('textarea');
+            ta.value = '8-920-227-56-76';
+            ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try {
+                document.execCommand('copy');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅';
+                setTimeout(() => { btn.innerHTML = '📋'; }, 2000);
+            } catch (e) { showToast('❌ Не удалось скопировать', true); }
+            document.body.removeChild(ta);
+        }
+    };
+
+    window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); generateBtn.click(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); document.getElementById('saveTxtBtn').click(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); fileInput.click(); }
+    });
+
+    updateStats();
+</script>
+</body>
+</html>
